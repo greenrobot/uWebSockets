@@ -106,12 +106,17 @@ protected:
     }
 
     void changePoll(Socket *socket) {
+        assert(socket);
+        assert(socket->nodeData);
         if (!threadSafeChange(nodeData->loop, this, socket->getPoll())) {
             if (socket->nodeData->tid != pthread_self()) {
                 socket->nodeData->asyncMutex->lock();
                 socket->nodeData->changePollQueue.push_back(socket);
                 socket->nodeData->asyncMutex->unlock();
-                socket->nodeData->async->send();
+                // OBX patch: socket->nodeData->async was observed to be null sporadically on macOS (issue #577)
+                // Checking for null was at least OK for sync test; but not sure if this is free of side effects(!)
+                // uv_async_send() docs: "Wake up the event loop and call the async handle’s callback."
+                if(socket->nodeData->async) socket->nodeData->async->send();
             } else {
                 change(socket->nodeData->loop, socket, socket->getPoll());
             }
